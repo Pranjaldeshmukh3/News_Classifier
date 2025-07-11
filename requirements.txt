@@ -8,4 +8,5 @@ requests
 beautifulsoup4
 matplotlib
 seaborn
-gensim
+gensim==4.3.2
+

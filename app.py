@@ -3,17 +3,17 @@ import numpy as np
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-
 # --- Load Saved Models ---
 @st.cache_resource
 def load_models():
-    w2v_model = Word2Vec.load("word2vec_model.bin")
-    encoder = joblib.load("label_encoder.pkl")
+    vectorizer = joblib.load("tfidf_vectorizer.pkl")  # Load TfidfVectorizer
+    encoder = joblib.load("encoder.pkl")
     clf_lr = joblib.load("logistic_regression.pkl")
     clf_rf = joblib.load("random_forest.pkl")
-    return w2v_model, encoder, clf_lr, clf_rf
+    return vectorizer, encoder, clf_lr, clf_rf
 
-w2v_model, encoder, clf_lr, clf_rf = load_models()
+# Load models
+vectorizer, encoder, clf_lr, clf_rf = load_models()
 
 # --- Preprocess Function ---
 import re
@@ -26,87 +26,39 @@ stop_words = set(stopwords.words('english'))
 stemmer = SnowballStemmer("english")
 
 def preprocess(text):
+    # Clean the text
     text = re.sub("[^a-zA-Z]", " ", text)
     text = text.lower()
     words = text.split()
+    # Remove stopwords and stem
     words = [stemmer.stem(word) for word in words if word not in stop_words]
     return " ".join(words)
 
-# --- Vectorize Function ---
-def vectorize(sentence):
-    words = sentence.split()
-    word_vecs = [w2v_model.wv[word] for word in words if word in w2v_model.wv]
-    if not word_vecs:
-        return np.zeros(w2v_model.vector_size)
-    return np.mean(word_vecs, axis=0).reshape(1, -1)
+# --- Streamlit App UI ---
+st.title("📰 News Classifier")
+st.write("Enter a news article text below to classify it into categories.")
 
-# --- Streamlit UI (same as earlier) ---
-# ... (keep the UI code I shared above unchanged)
+# Text input
+user_input = st.text_area("Enter News Text", height=200)
 
+# Select classifier
+classifier_choice = st.selectbox("Choose Classifier:", ["Logistic Regression", "Random Forest"])
 
-# --- Streamlit UI ---
-st.set_page_config(page_title="News Classifier", page_icon="📰", layout="centered")
-
-st.title("News Article Classifier")
-st.markdown(
-    """
-    This app predicts the category of BBC news articles using **Word2Vec embeddings** and ML models.
-    - **Enter text** in the box below and select your preferred classifier.
-    - Get predictions with **Logistic Regression** or **Random Forest**.
-    """
-)
-
-# User Input
-user_text = st.text_area("Enter a BBC news headline/article:", height=150, placeholder="Type your news article here...")
-model_choice = st.selectbox("Choose a Classifier:", ("Logistic Regression", "Random Forest"))
-
-if st.button("🔮 Predict"):
-    if not user_text.strip():
-        st.warning("Please enter some text to classify.")
+if st.button("Classify"):
+    if user_input.strip() == "":
+        st.warning("Please enter some text.")
     else:
-        # Preprocess and Vectorize user input
-        cleaned_text = preprocess(user_text)
-        user_vec = vectorize(cleaned_text).reshape(1, -1)
+        # Preprocess and vectorize the input
+        cleaned_text = preprocess(user_input)
+        vector = vectorizer.transform([cleaned_text])
 
-        # Make Prediction
-        if model_choice == "Logistic Regression":
-            pred_encoded = clf_lr.predict(user_vec)[0]
+        # Predict
+        if classifier_choice == "Logistic Regression":
+            prediction = clf_lr.predict(vector)
         else:
-            pred_encoded = clf_rf.predict(user_vec)[0]
+            prediction = clf_rf.predict(vector)
 
-        pred_label = encoder.inverse_transform([pred_encoded])[0]
-        st.success(f"**Predicted Category:** `{pred_label.upper()}`")
+        # Decode predicted label
+        predicted_category = encoder.inverse_transform(prediction)[0]
 
-# --- Show Confusion Matrix ---
-if st.checkbox("Show Confusion Matrices"):
-    st.markdown("### Confusion Matrix (Test Set)")
-    y_pred_lr = clf_lr.predict(X_test)
-    y_pred_rf = clf_rf.predict(X_test)
-
-    cm_lr = confusion_matrix(y_test, y_pred_lr)
-    cm_rf = confusion_matrix(y_test, y_pred_rf)
-    class_names = encoder.classes_
-
-    # Plot side-by-side confusion matrices
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-    sns.heatmap(cm_lr, annot=True, fmt="d", cmap="Greens", ax=axes[0])
-    axes[0].set_title("Logistic Regression")
-    axes[0].set_xlabel("Predicted")
-    axes[0].set_ylabel("Actual")
-    axes[0].xaxis.set_ticklabels(class_names, rotation=45)
-    axes[0].yaxis.set_ticklabels(class_names, rotation=0)
-
-    sns.heatmap(cm_rf, annot=True, fmt="d", cmap="Blues", ax=axes[1])
-    axes[1].set_title("Random Forest")
-    axes[1].set_xlabel("Predicted")
-    axes[1].set_ylabel("Actual")
-    axes[1].xaxis.set_ticklabels(class_names, rotation=45)
-    axes[1].yaxis.set_ticklabels(class_names, rotation=0)
-
-    plt.tight_layout()
-    st.pyplot(fig)
-
-# Footer
-st.markdown("---")
-st.markdown("[GitHub Repository](https://github.com/) | Made with using Streamlit")
+        st.success(f"Predicted Category: **{predicted_category}**")

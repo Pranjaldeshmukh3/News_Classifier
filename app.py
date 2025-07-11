@@ -1,7 +1,8 @@
 import streamlit as st
 import numpy as np
 import joblib
-from gensim.models import Word2Vec
+from sklearn.feature_extraction.text import TfidfVectorizer
+
 
 # --- Load Saved Models ---
 @st.cache_resource
